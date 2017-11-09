@@ -11,18 +11,31 @@ using namespace std;
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
+#include <assert.h>
+#include <syscall.h>
+#include <time.h>
 #define BT_BUF_SIZE 100
 
-void
-myfunc3(void)
+
+uint64_t now()
+{
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return t.tv_sec*1000000000 + t.tv_nsec;
+}
+
+
+void myfunc3(void)
 {
   int j, nptrs;
   void *buffer[BT_BUF_SIZE];
   char **strings;
 
+  uint64_t start = now();
   nptrs = backtrace(buffer, BT_BUF_SIZE);
-  printf("backtrace() returned %d addresses\n", nptrs);
+  uint64_t end = now();
+  int tid = syscall(SYS_gettid);
+  printf("backtrace() returned %d addresses tid=%d %lu\n", nptrs, tid, end-start);
 
   /* The call backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO)
           would produce similar output to the following: */
@@ -83,16 +96,22 @@ int main() {
 }
 #endif
 
-void btscan()
+void* btscan(void* arg)
 {
+  //std::cout << "started" << std::endl;
   sleep(1);
+  printf("started\n");
+  //assert(0);
   install_SIG_handlers(SIGRTMAX-3);
   while (true) {
     int pid = getpid ("name" );
     std::cout << "PID=" << pid << std::endl;
     while(true)
     {
-      kill(pid, SIGRTMAX-3);
+      int tgid=getpid();
+      //tid=gettid();
+      syscall(SYS_tgkill, tgid, pid, SIGRTMAX-3);
+      //tkill(pid, SIGRTMAX-3);
       sleep(1);
     }
   }
@@ -101,13 +120,12 @@ void btscan()
 __attribute__((constructor))
 void init()
 {
-  static std::thread worker {btscan};
+  printf("init\n");
+  //static std::thread worker {btscan};
+  pthread_t thr;
+  int r=pthread_create(&thr, nullptr, btscan, nullptr);
+  printf("pthread_create=%d\n",r);
   //std::cout << "INIT" << std::endl;
 }
 
 
-
-int main(int argc, char** argv)
-{
-
-}
